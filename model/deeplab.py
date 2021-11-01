@@ -181,7 +181,8 @@ class ResNet(nn.Layer):
         any batchnorm parameter
         """
         b = []
-
+        params_list = list()
+        # for m in self.
         b.append(self.conv1)
         b.append(self.bn1)
         b.append(self.layer1)
@@ -232,6 +233,24 @@ def Res_Deeplab(num_classes=21):
 
 
 if __name__ == '__main__':
+
+    from reprod_log import ReprodLogger
+    import paddle.optimizer as optim
+    reprod_logger = ReprodLogger()
+    fake_data = np.load('fake_data.npy', allow_pickle=True)
+    fake_label = np.load('fake_label.npy', allow_pickle=True)
+    input = paddle.to_tensor(fake_data)
+    label = paddle.to_tensor(fake_label)
+
     model = Res_Deeplab()
+    # model.load_dict(paddle.load('ass_from_torch.pdparams'))
+    # model.eval()
+    # # print(output)
+    #
+    # # forward
+    # output = model(input)
+    # reprod_logger.add("forward", output.numpy())
+    # reprod_logger.save("forward_paddle.npy")
+
 
     # print(model)

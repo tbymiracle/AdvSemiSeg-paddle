@@ -1,5 +1,5 @@
 import paddle.nn as nn
-
+import paddle
 
 class FCDiscriminator(nn.Layer):
 
@@ -31,3 +31,8 @@ class FCDiscriminator(nn.Layer):
 		#x = self.sigmoid(x) 
 
 		return x
+
+if __name__ == '__main__':
+
+	model = FCDiscriminator(num_classes=21)
+	paddle.save(model.state_dict(), 'init_Dis.pdparams')

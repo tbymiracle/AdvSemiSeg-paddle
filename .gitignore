@@ -1,6 +1,8 @@
 # models
 model/*.pth
-
+model/*.pdparams
+*.pdparams
+*.params
 # pyc
 *.pyc
 deeplab/*.pyc
@@ -13,4 +15,3 @@ result*
 
 # dataset
 dataset/VOC2012
-

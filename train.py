@@ -22,7 +22,7 @@ MODEL = 'DeepLab'
 BATCH_SIZE = 10
 ITER_SIZE = 1
 NUM_WORKERS = 4
-DATA_DIRECTORY = './dataset/VOC2012'
+DATA_DIRECTORY = '/home/aistudio/data/data37195/VOCdevkit/VOC2012'
 DATA_LIST_PATH = './dataset/voc_list/train_aug.txt'
 IGNORE_LABEL = 255
 INPUT_SIZE = '321,321'
@@ -32,7 +32,7 @@ NUM_CLASSES = 21
 NUM_STEPS = 20000
 POWER = 0.9
 RANDOM_SEED = 1234
-RESTORE_FROM = 'http://vllab1.ucmerced.edu/~whung/adv-semi-seg/resnet101COCO-41f33a49.pth'
+RESTORE_FROM = 'ass_from_torch.pdparams'
 SAVE_NUM_IMAGES = 2
 SAVE_PRED_EVERY = 5000
 SNAPSHOT_DIR = './snapshots/'
@@ -170,19 +170,25 @@ def main():
     # create network
     model = Res_Deeplab(num_classes=args.num_classes)
 
-
     # load pretrained parameters
     print(args.restore_from)
     saved_state_dict = paddle.load(args.restore_from)
 
     # only copy the params that exist in current model (caffe-like)
-    new_params = model.state_dict().copy()
-    for name, param in new_params.items():
-        print(name)
-        if name in saved_state_dict and param.size() == saved_state_dict[name].shape:
-            new_params[name].copy_(saved_state_dict[name])
-            print('copy {}'.format(name))
-    model.load_state_dict(new_params)
+    old_dict = paddle.load(args.restore_from)
+    model_dict = model.state_dict()
+    old_dict = {k: v for k, v in old_dict.items() if (k in model_dict)}
+    model_dict.update(old_dict)
+    model.load_dict(model_dict)
+
+    # new_params = model.state_dict().copy()
+    # for name, param in new_params.items():
+    #     print(name)
+    #     if name in saved_state_dict and param.shape == saved_state_dict[name].shape:
+    #         new_params[name].copy_(saved_state_dict[name])
+    #         print('copy {}'.format(name))
+    # model.load_dict(new_params)
+
     model.train()
 
 
@@ -218,7 +224,7 @@ def main():
             print('loading train ids from {}'.format(args.partial_id))
         else:
             train_ids = range(train_dataset_size)
-            np.random.shuffle(train_ids)
+            np.random.shuffle(list(train_ids))
 
         pickle.dump(train_ids, open(osp.join(args.snapshot_dir, 'train_id.pkl'), 'wb'))
 
@@ -226,17 +232,17 @@ def main():
         train_sampler1 = RandomSampler(Subset(dataset=train_dataset,indices=train_ids[:partial_size]))
         train_remain_sampler1 = RandomSampler(Subset(dataset=train_dataset, indices=train_ids[partial_size:]))
         train_gt_sampler1 = RandomSampler(Subset(dataset=train_dataset, indices=train_ids[:partial_size]))
-        train_sampler = BatchSampler(sampler=train_sampler1)
-        train_remain_sampler = BatchSampler(sampler=train_remain_sampler1)
-        train_gt_sampler = BatchSampler(sampler=train_gt_sampler1)
+        train_sampler = BatchSampler(batch_size=args.batch_size, sampler=train_sampler1)
+        train_remain_sampler = BatchSampler(batch_size=args.batch_size, sampler=train_remain_sampler1)
+        train_gt_sampler = BatchSampler(batch_size=args.batch_size, sampler=train_gt_sampler1)
 
-
+        print(args.batch_size)
         trainloader = DataLoader(train_dataset,
-                        batch_size=args.batch_size, batch_sampler=train_sampler, num_workers=4, use_shared_memory=True)
+                        batch_sampler=train_sampler, num_workers=4, use_shared_memory=True)
         trainloader_remain = DataLoader(train_dataset,
-                        batch_size=args.batch_size, batch_sampler=train_remain_sampler, num_workers=4, use_shared_memory=True)
+                        batch_sampler=train_remain_sampler, num_workers=4, use_shared_memory=True)
         trainloader_gt = DataLoader(train_gt_dataset,
-                        batch_size=args.batch_size, batch_sampler=train_gt_sampler, num_workers=4, use_shared_memory=True)
+                        batch_sampler=train_gt_sampler, num_workers=4, use_shared_memory=True)
 
         trainloader_remain_iter = enumerate(trainloader_remain)
 
@@ -253,7 +259,7 @@ def main():
     optimizer.clear_grad()
 
     # optimizer for discriminator network
-    optimizer_D = optim.Adam(parameters=modelD.parameters(),
+    optimizer_D = optim.Adam(parameters=model_D.parameters(),
                              learning_rate=args.learning_rate_D, beta1=0.9, beta2=0.99)
     optimizer_D.clear_grad()
 
@@ -278,9 +284,7 @@ def main():
         loss_semi_adv_value = 0
 
         optimizer.clear_grad()
-        adjust_learning_rate(optimizer, i_iter)
         optimizer_D.clear_grad()
-        adjust_learning_rate_D(optimizer_D, i_iter)
 
         for sub_i in range(args.iter_size):
 
@@ -432,3 +436,40 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+    from reprod_log import ReprodLogger
+    import paddle.optimizer as optim
+
+    reprod_logger = ReprodLogger()
+    fake_data = np.load('./model/fake_data.npy', allow_pickle=True)
+    fake_label = np.load('./model/fake_label.npy', allow_pickle=True)
+    input = paddle.to_tensor(fake_data)
+    label = paddle.to_tensor(fake_label)
+
+    model = Res_Deeplab(num_classes=args.num_classes)
+    model_D = FCDiscriminator(num_classes=args.num_classes)
+
+    model.load_dict(paddle.load('ass_from_torch.pdparams'))
+    model_D.load_dict(paddle.load('Dis_from_torch.pdparams'))
+    model.eval()
+    model_D.eval()
+    # print(output)
+
+    # forward
+    output = model(input)
+    outputD = model_D(output)
+    reprod_logger.add("forward_D", outputD.numpy())
+    reprod_logger.save("forward_D_paddle.npy")
+
+    # optimizer and lr
+    optimizer = optim.Momentum(parameters=model.optim_parameters(args),
+                               learning_rate=args.learning_rate, momentum=args.momentum, weight_decay=args.weight_decay)
+    optimizer.clear_grad()
+
+    # optimizer for discriminator network
+    optimizer_D = optim.Adam(parameters=model_D.parameters(),
+                             learning_rate=args.learning_rate_D, beta1=0.9, beta2=0.99)
+    optimizer_D.clear_grad()
+
+    # for i in range(5):
+

@@ -1,5 +1,6 @@
 import paddle
 import numpy as np
+import paddle.nn as nn
 
 label = np.random.randn(1,3,258,258)
 label = paddle.to_tensor(label)
@@ -7,14 +8,22 @@ label = paddle.to_tensor(label)
 label = label.astype('long')
 # print(label)
 
-from paddle.io import Dataset, RandomSampler
+# train_dataset_size = 100
+# train_ids = range(train_dataset_size)
+# print(train_ids)
+#
+# partial_size = 40
+# print(len(train_ids[:partial_size]))
 
-train_dataset_size = 100
-train_ids = range(train_dataset_size)
-print(train_ids)
+# state = paddle.load('./resnet50_v1s-25a187fa.pdparams')
+# print(state)
 
-partial_size = 40
-print(len(train_ids[:partial_size]))
+# interp = nn.Upsample(size=(label[1], label[0]), mode='bilinear', align_corners=True)
+# print(interp(label))
 
-state = paddle.load('./resnet50_v1s-25a187fa.pdparams')
-print(state)
+conv1 = nn.Conv2D(64,128,3)
+conv2 = nn.Conv2D(128,256,3)
+b = []
+b.append(conv1)
+b.append(conv2)
+print(b)
